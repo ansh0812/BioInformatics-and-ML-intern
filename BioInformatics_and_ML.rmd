@@ -1,0 +1,329 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+## BioInformatics and Machine Learning Intern
+Installing pyreadr to read rds file
+
+```{r}
+# Load the dplyr package
+library(dplyr)
+
+# Read an RDS file and assign it to a variable
+df <- readRDS("exgr_test.rds")
+
+# View the data
+head(df)
+
+```
+## Task 1: Counting Unique Transcripts
+To find the count of unique transcripts, we identify the unique transcript IDs within the dataset. Each transcript is uniquely represented by its transcript ID
+
+```{r}
+unique_transcripts <- length(unique(df$transcript_id))
+unique_transcripts
+```
+As you can see there are 234485 transcripts in the entire datatset
+
+##Task 2: Counting Unique Exons
+### To determine the number of unique exons, we follow these steps:
+1.  Group the data by transcript IDs.
+2.  Calculate the count of exons within each transcript.
+3. Sum up the counts from all transcripts to obtain the total count of unique exons.
+```{r}
+exon_counts_per_transcript <- df %>%
+  group_by(transcript_id) %>%
+  summarize(group_count = n())
+
+# View the result
+print(exon_counts_per_transcript)
+
+# Calculate the sum of group counts
+total_unique_exons <- exon_counts_per_transcript %>%
+  summarize(sum_group_count = sum(group_count))
+
+print(total_unique_exons)
+
+```
+There are 140986 total unique exons in the entire dataset.
+
+### Task 3: Calculating Average and Median Exon Length
+To calculate the average and median length of an exon, we utilize the 'mean' and 'median' functions applied to the 'width' column, which represents the exon width.
+```{r}
+# Calculate the mean (average) length
+average_length <- mean(df$width)
+
+# Calculate the median length
+average_median <- median(df$width)
+
+# Print the results
+average_length
+average_median
+```
+## Task 4: Calculating the length of introns
+
+Inorder to calculate the length of introns we need to handle the positive strands and negative strands differently because
+
+Length of intron = Start-co-ordinate of exon - end-co-ordinate of previous exon
+
+
+For positive strands,the end coordinate of previous exon would be the end cordinate of the above row
+
+For negative strands,the end coordinate of previos exon would be end coordinate of the row below
+
+
+```{r}
+# Load necessary libraries
+library(dplyr)
+library(tidyr)
+
+# Separate the DataFrame into positive and negative strand DataFrames
+positive_strand_df <- df %>%
+  filter(strand == '+')
+
+negative_strand_df <- df %>%
+  filter(strand == '-')
+
+# Sort the positive strand DataFrame by 'transcript_id' and 'rank'
+positive_strand_df <- positive_strand_df %>%
+  arrange(transcript_id, rank)
+
+# Calculate intron lengths for positive strand exons
+positive_strand_df <- positive_strand_df %>%
+  group_by(transcript_id) %>%
+  mutate(intron_length = start - lag(end, default =NA ) + 1)
+
+positive_strand_df$intron_length <- ifelse(is.na(positive_strand_df$intron_length), 0, positive_strand_df$intron_length)
+positive_strand_df$intron_length <- as.integer(positive_strand_df$intron_length)
+
+
+
+# Sort the negative strand DataFrame by 'transcript_id' and 'rank'
+negative_strand_df <- negative_strand_df %>%
+  arrange(transcript_id, rank)
+
+# Calculate intron lengths for negative strand exons
+negative_strand_df <- negative_strand_df %>%
+  group_by(transcript_id) %>%
+  mutate(intron_length = start - lead(end, default = NA)+1)
+
+negative_strand_df$intron_length <- ifelse(is.na(negative_strand_df$intron_length), 0, negative_strand_df$intron_length)
+negative_strand_df$intron_length <- as.integer(negative_strand_df$intron_length)
+
+# Combine positive and negative strand DataFrames row-wise
+combined_df <- bind_rows(positive_strand_df, negative_strand_df)
+
+# Fill NA values in the 'intron_length' column with 0 and convert to integer
+combined_df$intron_length <- ifelse(is.na(combined_df$intron_length), 0, combined_df$intron_length)
+combined_df$intron_length <- as.integer(combined_df$intron_length)
+
+# Sort the combined DataFrame by 'transcript_id' and 'rank'
+combined_df <- combined_df %>%
+  arrange(transcript_id, rank)
+
+# Print the resulting DataFrame
+print(combined_df)
+```
+
+
+## Bonus Task - Calculate L1, L2, U1, U2 ensuring no overlap
+
+Inorder to calculate l1, l2, u1, u2 for each exon(except the first and last exon) we need both the intron length on left side (that is the current intron length) and the intron length on right side (that is the intron length of next exon)
+
+So first lets create a column which also stores the intron length of the next exon
+
+As for calculating intron length we need to divide the dataset into 2 parts (one for positive strands and one for negative strands)
+
+The same way we will divide it and calculate the next intron length
+
+```{r}
+
+# Load necessary libraries
+library(dplyr)
+
+# For negative strand DataFrame:
+# Calculate the previous intron length within each transcript group
+negative_strand_df <- negative_strand_df %>%
+  group_by(transcript_id) %>%
+  mutate(next_intron_length = lag(intron_length, default = 0)) %>%
+  ungroup() %>%
+  mutate(next_intron_length = as.integer(next_intron_length))
+
+# For positive strand DataFrame:
+# Calculate the previous intron length within each transcript group
+positive_strand_df <- positive_strand_df %>%
+  group_by(transcript_id) %>%
+  mutate(next_intron_length = lead(intron_length, default = 0)) %>%
+  ungroup() %>%
+  mutate(next_intron_length = as.integer(next_intron_length))
+
+
+# Combine positive and negative strand DataFrames row-wise
+complete_df <- bind_rows(positive_strand_df, negative_strand_df)
+
+# Fill NA values in the 'intron_length' column with 0 and convert to integer
+complete_df$intron_length <- ifelse(is.na(complete_df$intron_length), 0, complete_df$intron_length)
+complete_df$intron_length <- as.integer(complete_df$intron_length)
+
+# Sort the combined DataFrame by 'transcript_id' and 'rank'
+complete_df <- complete_df %>%
+  arrange(transcript_id, rank)
+
+# Print the resulting DataFrame
+print(complete_df)
+```
+
+
+If the length, next length and width are greater than 200 then calculating them is much easier. We simply use the below formulas
+
+1. L1= start_coordinate - 100
+2. L2= start_cordinate + 100
+3. u1= end_cordinate - 100
+4. u2= end_cordinate + 100
+
+Lets consider each one and understand what will happen if these (length, next length or width are greater than 200)
+
+1. L1
+     
+        According to the question L1 is 100 units of length before sj (start-cordinate) Hence L1 = start - 100
+        If we take the first exon L1 would be zero Since transcripts start only with an exon there is no space for l1
+        So l1 basicaly depends on the intron length If intron length is 0 then L1=0 I have add the code for this statement on
+        line 14
+        But if intron length is less than 200 then l1 will become start minus half of intron length L1=start-intron_length/2
+
+2. L2
+     
+        According to the question L2 is 100 units of length after sj (start-cordinate) Hence L2 = start + 100
+        So l2 basicaly depends on the exon width
+        If width less than 200 then l2 will become start plus half of width L2=start+exon_width/2
+
+3. u1
+     
+        According to the question u1 is 100 units of length before sj(end-cordinate) Hence u1 = end - 100
+        So u1 also basicaly depends on the exon width
+        If width less than 200 then u1 will become end minus half of exon width L2=end - exon_width/2
+
+4. u2
+        According to the question u2 is 100 units of length after  sj(end-cordinate) Hence u2 = end +100
+        If we take the last exon u2 would be zero Since transcripts end only with an exon there is no space for u2
+        So u2 basicaly depends on the next intron length If next intron length is 0 then u2=0 I have add the code for the same
+        But if next intron length is less than 200 then u2 will become end minus half of next intron length L2=start-intron_length/2
+
+
+
+
+```{r}
+
+# Define a function to calculate positions
+calculate_positions <- function(exon) {
+  # Extract data from the exon
+  start <- exon$start
+  end <- exon$end
+  length <- exon$intron_length
+  width <- exon$width
+  next_intron_length <- exon$next_intron_length
+
+  # Define inner functions to calculate L1, L2, U1, and U2
+  calculate_l1 <- function(start, length) {
+    if (length <= 200) {
+      if (length == 0) {
+        l1 <- 0
+      } else {
+        if (length %% 2 == 0) {
+          length <- length - 1
+        } else {
+          length <- length - 2
+        }
+        l1 <- start - (length / 2)
+      }
+    } else {
+      l1 <- start - 100
+    }
+    return(l1)
+  }
+
+  calculate_l2 <- function(start, width) {
+    if (width <= 200) {
+      if (width %% 2 == 0) {
+        width <- width - 1
+      } else {
+        width <- width - 2
+      }
+      l2 <- start + (width / 2)
+    } else {
+      l2 <- start + 100
+    }
+    return(l2)
+  }
+
+  calculate_u1 <- function(end, width) {
+    if (width <= 200) {
+      if (width %% 2 == 0) {
+        width <- width - 1
+      } else {
+        width <- width - 2
+      }
+      u1 <- end - (width / 2)
+    } else {
+      u1 <- end - 100
+    }
+    return(u1)
+  }
+
+  calculate_u2 <- function(end, next_intron_length) {
+    if (next_intron_length != 0) {
+      if (next_intron_length <= 200) {
+        if (next_intron_length %% 2 == 0) {
+          next_intron_length <- next_intron_length - 1
+        } else {
+          next_intron_length <- next_intron_length - 2
+        }
+        u2 <- end + (next_intron_length / 2)
+      } else {
+        u2 <- end + 100
+      }
+    } else {
+      u2 <- 0
+    }
+    return(u2)
+  }
+
+  # Calculate the positions
+  l1 <- calculate_l1(start, length)
+  l2 <- calculate_l2(start, width)
+  u1 <- calculate_u1(end, width)
+  u2 <- calculate_u2(end, next_intron_length)
+
+  # Round the positions using floor and ceiling
+  l1 <- ceiling(l1)
+  l2 <- floor(l2)
+  u1 <- ceiling(u1)
+  u2 <- floor(u2)
+
+  # Return the calculated positions
+  return(data.frame(L1 = l1, L2 = l2, U1 = u1, U2 = u2))
+}
+
+# Apply the calculate_positions function to the DataFrame and create new columns
+complete_df <- complete_df %>%
+  rowwise() %>%
+  do(calculate_positions(.)) %>%
+  bind_cols(complete_df)
+
+# Sort the combined DataFrame by 'transcript_id' and 'rank'
+complete_df <- complete_df %>%
+  arrange(transcript_id, rank)
+
+complete_df
+```
+
+
+
+
+
+
+
+
+
+
