@@ -1,12 +1,13 @@
 ---
 title: "R Notebook"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 ## BioInformatics and Machine Learning Intern
-Installing pyreadr to read rds file
 
-```{r}
+``` {r}
 # Load the dplyr package
 library(dplyr)
 
@@ -25,7 +26,7 @@ unique_transcripts <- length(unique(df$transcript_id))
 unique_transcripts
 ```
 As you can see there are 234485 transcripts in the entire datatset
-
+ 
 ##Task 2: Counting Unique Exons
 ### To determine the number of unique exons, we follow these steps:
 1.  Group the data by transcript IDs.
@@ -92,7 +93,7 @@ positive_strand_df <- positive_strand_df %>%
 # Calculate intron lengths for positive strand exons
 positive_strand_df <- positive_strand_df %>%
   group_by(transcript_id) %>%
-  mutate(intron_length = start - lag(end, default =NA ) + 1)
+  mutate(intron_length = start - lag(end, default =NA ) - 1)
 
 positive_strand_df$intron_length <- ifelse(is.na(positive_strand_df$intron_length), 0, positive_strand_df$intron_length)
 positive_strand_df$intron_length <- as.integer(positive_strand_df$intron_length)
@@ -106,7 +107,7 @@ negative_strand_df <- negative_strand_df %>%
 # Calculate intron lengths for negative strand exons
 negative_strand_df <- negative_strand_df %>%
   group_by(transcript_id) %>%
-  mutate(intron_length = start - lead(end, default = NA)+1)
+  mutate(intron_length = start - lead(end, default = NA)-1)
 
 negative_strand_df$intron_length <- ifelse(is.na(negative_strand_df$intron_length), 0, negative_strand_df$intron_length)
 negative_strand_df$intron_length <- as.integer(negative_strand_df$intron_length)
@@ -211,8 +212,8 @@ Lets consider each one and understand what will happen if these (length, next le
         But if next intron length is less than 200 then u2 will become end minus half of next intron length L2=start-intron_length/2
 
 
-
-
+Incase if you want the dataframe to not contain values where L2=u1 then please uncomment the lines. It will result in the dataframe where L1 cannot be equal to u1 
+ 
 ```{r}
 
 # Define a function to calculate positions
@@ -228,13 +229,13 @@ calculate_positions <- function(exon) {
   calculate_l1 <- function(start, length) {
     if (length <= 200) {
       if (length == 0) {
-        l1 <- 0
+         l1 <- 0
       } else {
         if (length %% 2 == 0) {
           length <- length - 1
-        } else {
-          length <- length - 2
         }
+        
+        #    else { length <- length - 2} 
         l1 <- start - (length / 2)
       }
     } else {
@@ -247,9 +248,8 @@ calculate_positions <- function(exon) {
     if (width <= 200) {
       if (width %% 2 == 0) {
         width <- width - 1
-      } else {
-        width <- width - 2
-      }
+      } 
+      #else {width <- width - 2} 
       l2 <- start + (width / 2)
     } else {
       l2 <- start + 100
@@ -261,9 +261,8 @@ calculate_positions <- function(exon) {
     if (width <= 200) {
       if (width %% 2 == 0) {
         width <- width - 1
-      } else {
-        width <- width - 2
-      }
+      } 
+        #else {width <- width - 2}  
       u1 <- end - (width / 2)
     } else {
       u1 <- end - 100
@@ -276,9 +275,8 @@ calculate_positions <- function(exon) {
       if (next_intron_length <= 200) {
         if (next_intron_length %% 2 == 0) {
           next_intron_length <- next_intron_length - 1
-        } else {
-          next_intron_length <- next_intron_length - 2
         }
+          #else {next_intron_length <- next_intron_length - 2}
         u2 <- end + (next_intron_length / 2)
       } else {
         u2 <- end + 100
