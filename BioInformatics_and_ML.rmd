@@ -173,6 +173,10 @@ complete_df <- complete_df %>%
 
 # Print the resulting DataFrame
 print(complete_df)
+
+#copying the df
+copy_of_complete_dataframe <- complete_df
+
 ```
 
 
@@ -204,7 +208,6 @@ Lets consider each one and understand what will happen if these (length, next le
         According to the question u1 is 100 units of length before sj(end-cordinate) Hence u1 = end - 100
         So u1 also basicaly depends on the exon width
         If width less than 200 then u1 will become end minus half of exon width L2=end - exon_width/2
-
 4. u2
         According to the question u2 is 100 units of length after  sj(end-cordinate) Hence u2 = end +100
         If we take the last exon u2 would be zero Since transcripts end only with an exon there is no space for u2
@@ -213,9 +216,7 @@ Lets consider each one and understand what will happen if these (length, next le
 
 
 Incase if you want the dataframe to not contain values where L2=u1 then please uncomment the lines. It will result in the dataframe where L1 cannot be equal to u1 
- 
 ```{r}
-
 # Define a function to calculate positions
 calculate_positions <- function(exon) {
   # Extract data from the exon
@@ -315,13 +316,47 @@ complete_df <- complete_df %>%
 
 complete_df
 ```
+## Optimized code for Bonus problem
+```{r}
+library(dplyr)
+library(magrittr)
+
+# function which calculates the values of L1 L2 U1 U2
+calculate_positions_vectorized <- function(df) {
+  df <- df %>%
+    mutate(
+      half_intron_length = ifelse(intron_length == 0, 0, ifelse(intron_length %% 2 == 0, intron_length - 1, intron_length) / 2),
+      half_exon_length = ifelse(width %% 2 == 0, width - 1, width) / 2,
+      next_half_intron_length = ifelse(next_intron_length == 0, 0, ifelse(next_intron_length %% 2 == 0, next_intron_length - 1, next_intron_length) / 2),
+      L1 = ifelse(intron_length == 0, 0, ceiling(start - pmin(100, half_intron_length))),
+      L2 = floor(start + pmin(100, half_exon_length)),
+      U1 = ceiling(end - pmin(100, half_exon_length)),
+      U2 = ifelse(next_intron_length == 0, 0, floor(end + pmin(100, next_half_intron_length)))
+    )
+  
+  return(df)
+}
+
+# Apply the calculate_positions_vectorized function to the data frame 'df'
+final_df <- calculate_positions_vectorized(copy_of_complete_dataframe)
+
+# Sort the combined data frame by 'transcript_id' and 'rank'
+final_df <- final_df %>%
+  arrange(transcript_id, rank)
+
+```
 
 
+```{r}
 
+# Create a list of column names to exclude
+columns_to_exclude <- c("next_intron_length", "half_exon_length","half_intron_length","next_half_intron_length"
+)
 
+# Select only the columns that are NOT in the list of columns to exclude
+filtered_df <- final_df[, !names(final_df) %in% columns_to_exclude]
 
-
-
-
+filtered_df
+```
 
 
